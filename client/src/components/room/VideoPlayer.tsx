@@ -113,9 +113,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (isPlaying) {
         playerRef.current.playVideo();
       } else {
+        playerRef.current.seekTo(currentTime, true);
         playerRef.current.pauseVideo();
       }
-      setTimeout(() => { isServerSyncingRef.current = false; }, 1000);
+      setTimeout(() => { isServerSyncingRef.current = false; }, 800);
       return;
     }
 
@@ -149,33 +150,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     try {
       const playerTime = playerRef.current.getCurrentTime() || 0;
+      const playerState = playerRef.current.getPlayerState();
 
-      let expectedTime = currentTime;
       if (isPlaying) {
+        // --- PLAYING SYNC ---
         const now = Date.now();
         const updatedTime = new Date(updatedAt).getTime();
+        let expectedTime = currentTime;
         const elapsedSeconds = (now - updatedTime) / 1000;
         if (elapsedSeconds > 0 && elapsedSeconds < 86400) {
           expectedTime += elapsedSeconds;
         }
-      }
 
-      // 1. Drift seek check
-      if (Math.abs(playerTime - expectedTime) > 1.2) {
-        playerRef.current.seekTo(expectedTime, true);
-      }
+        // Seek if drift > 1.2 seconds
+        if (Math.abs(playerTime - expectedTime) > 1.2) {
+          playerRef.current.seekTo(expectedTime, true);
+        }
 
-      // 2. Play / Pause state enforcement
-      const playerState = playerRef.current.getPlayerState();
-      const isPlayerPlaying = playerState === window.YT?.PlayerState?.PLAYING;
-      const isPlayerPaused = playerState === window.YT?.PlayerState?.PAUSED;
-
-      if (isPlaying) {
-        if (!isPlayerPlaying) {
+        if (playerState !== window.YT?.PlayerState?.PLAYING && playerState !== window.YT?.PlayerState?.BUFFERING) {
           playerRef.current.playVideo();
         }
       } else {
-        if (!isPlayerPaused) {
+        // --- PAUSED SYNC ---
+        // Seek to exact paused timestamp and pause unconditionally
+        if (Math.abs(playerTime - currentTime) > 0.3) {
+          playerRef.current.seekTo(currentTime, true);
+        }
+
+        if (playerState !== window.YT?.PlayerState?.PAUSED) {
           playerRef.current.pauseVideo();
         }
       }
@@ -185,7 +187,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const timer = setTimeout(() => {
       isServerSyncingRef.current = false;
-    }, 1200);
+    }, 1000);
 
     return () => {
       clearTimeout(timer);
