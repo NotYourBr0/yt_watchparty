@@ -43,7 +43,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const playerRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isSyncingRef = useRef(false);
+  const isServerSyncingRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const lastStateUpdateRef = useRef<number>(0);
 
@@ -101,23 +101,25 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const handlePlayerStateChange = (event: any) => {
-    if (isSyncingRef.current || !playerRef.current) return;
+    // Ignore any state change event triggered while server sync is active
+    if (isServerSyncingRef.current || !playerRef.current) return;
 
+    const state = event.data;
+    const time = playerRef.current.getCurrentTime() || 0;
+
+    // For participants: if they click YouTube player directly, revert to authoritative server state
     if (role === Role.PARTICIPANT) {
-      // Revert participant's action
-      isSyncingRef.current = true;
+      isServerSyncingRef.current = true;
       if (isPlaying) {
         playerRef.current.playVideo();
       } else {
         playerRef.current.pauseVideo();
       }
-      setTimeout(() => { isSyncingRef.current = false; }, 800);
+      setTimeout(() => { isServerSyncingRef.current = false; }, 1000);
       return;
     }
 
-    const state = event.data;
-    const time = playerRef.current.getCurrentTime() || 0;
-
+    // For host/mod: emit manual state changes to server
     if (state === window.YT?.PlayerState?.PLAYING && !isPlaying) {
       onPlay(time);
     } else if (state === window.YT?.PlayerState?.PAUSED && isPlaying) {
@@ -130,20 +132,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (isReady && playerRef.current && videoId) {
       const currentVideoId = playerRef.current.getVideoData()?.video_id;
       if (currentVideoId !== videoId) {
-        isSyncingRef.current = true;
+        isServerSyncingRef.current = true;
         playerRef.current.loadVideoById(videoId);
-        setTimeout(() => { isSyncingRef.current = false; }, 800);
+        setTimeout(() => { isServerSyncingRef.current = false; }, 1000);
       }
     } else if (videoId && !playerRef.current && window.YT?.Player) {
       initPlayer();
     }
   }, [videoId, isReady]);
 
-  // Sync playback state (play/pause/seek) from props
+  // Sync playback state (play/pause/seek) from server props
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
 
-    isSyncingRef.current = true;
+    isServerSyncingRef.current = true;
 
     try {
       const playerTime = playerRef.current.getCurrentTime() || 0;
@@ -158,36 +160,44 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
 
-      if (Math.abs(playerTime - expectedTime) > 1.5) {
+      // 1. Drift seek check
+      if (Math.abs(playerTime - expectedTime) > 1.2) {
         playerRef.current.seekTo(expectedTime, true);
       }
 
+      // 2. Play / Pause state enforcement
       const playerState = playerRef.current.getPlayerState();
       const isPlayerPlaying = playerState === window.YT?.PlayerState?.PLAYING;
+      const isPlayerPaused = playerState === window.YT?.PlayerState?.PAUSED;
 
-      if (isPlaying && !isPlayerPlaying) {
-        playerRef.current.playVideo();
-      } else if (!isPlaying && isPlayerPlaying) {
-        playerRef.current.pauseVideo();
+      if (isPlaying) {
+        if (!isPlayerPlaying) {
+          playerRef.current.playVideo();
+        }
+      } else {
+        if (!isPlayerPaused) {
+          playerRef.current.pauseVideo();
+        }
       }
     } catch (e) {
       console.error('Error syncing player', e);
     }
 
     const timer = setTimeout(() => {
-      isSyncingRef.current = false;
-    }, 800);
+      isServerSyncingRef.current = false;
+    }, 1200);
 
-    return () => clearTimeout(timer);
-
+    return () => {
+      clearTimeout(timer);
+    };
   }, [isPlaying, currentTime, updatedAt, isReady]);
 
-  // Check for local seeks
+  // Check for local seeks by Host/Mod
   useEffect(() => {
     if (!isReady || role === Role.PARTICIPANT) return;
 
     const interval = setInterval(() => {
-      if (isSyncingRef.current || !playerRef.current || !isPlaying) return;
+      if (isServerSyncingRef.current || !playerRef.current || !isPlaying) return;
 
       const time = playerRef.current.getCurrentTime();
       if (time !== undefined && Math.abs(time - lastStateUpdateRef.current) > 3) {
