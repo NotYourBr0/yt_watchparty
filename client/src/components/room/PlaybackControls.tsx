@@ -9,8 +9,8 @@ interface PlaybackControlsProps {
   updatedAt: string;
   duration?: number;
   role: Role;
-  onPlay: () => void;
-  onPause: () => void;
+  onPlay: (time?: number) => void;
+  onPause: (time?: number) => void;
   onSeek: (time: number) => void;
   onRequestPlay: () => void;
   onRequestPause: () => void;
@@ -39,17 +39,24 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
   useEffect(() => {
     if (isScrubbing) return;
     
-    setLocalTime(currentTime);
+    let currentCalcTime = currentTime;
+    if (isPlaying) {
+      const elapsed = (Date.now() - new Date(updatedAt).getTime()) / 1000;
+      if (elapsed > 0 && elapsed < 86400) {
+        currentCalcTime += elapsed;
+      }
+    }
+    setLocalTime(currentCalcTime);
     
     if (isPlaying) {
       const start = Date.now();
       const interval = setInterval(() => {
         const elapsed = (Date.now() - start) / 1000;
-        setLocalTime(currentTime + elapsed);
-      }, 1000);
+        setLocalTime(currentCalcTime + elapsed);
+      }, 500);
       return () => clearInterval(interval);
     }
-  }, [isPlaying, currentTime, isScrubbing]);
+  }, [isPlaying, currentTime, updatedAt, isScrubbing]);
 
   const formatTime = (seconds: number) => {
     if (isNaN(seconds) || seconds < 0) return '0:00';
@@ -103,7 +110,7 @@ export const PlaybackControls: React.FC<PlaybackControlsProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              onClick={isPlaying ? onPause : onPlay}
+              onClick={() => isPlaying ? onPause(localTime) : onPlay(localTime)}
               className="text-white hover:bg-zinc-800 p-2 rounded-full"
             >
               {isPlaying ? <Pause className="h-5 w-5 fill-current" /> : <Play className="h-5 w-5 fill-current" />}

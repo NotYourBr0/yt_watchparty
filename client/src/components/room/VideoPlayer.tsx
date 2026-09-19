@@ -111,7 +111,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       } else {
         playerRef.current.pauseVideo();
       }
-      setTimeout(() => { isSyncingRef.current = false; }, 100);
+      setTimeout(() => { isSyncingRef.current = false; }, 800);
       return;
     }
 
@@ -132,7 +132,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (currentVideoId !== videoId) {
         isSyncingRef.current = true;
         playerRef.current.loadVideoById(videoId);
-        setTimeout(() => { isSyncingRef.current = false; }, 100);
+        setTimeout(() => { isSyncingRef.current = false; }, 800);
       }
     } else if (videoId && !playerRef.current && window.YT?.Player) {
       initPlayer();
@@ -158,7 +158,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
 
-      if (Math.abs(playerTime - expectedTime) > 2) {
+      if (Math.abs(playerTime - expectedTime) > 1.5) {
         playerRef.current.seekTo(expectedTime, true);
       }
 
@@ -174,9 +174,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       console.error('Error syncing player', e);
     }
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       isSyncingRef.current = false;
-    }, 400);
+    }, 800);
+
+    return () => clearTimeout(timer);
 
   }, [isPlaying, currentTime, updatedAt, isReady]);
 
