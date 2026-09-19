@@ -7,8 +7,27 @@ import { setupSocket } from './socket';
 import { RoomManager } from './services/RoomManager';
 
 const app = express();
-app.use(cors({ origin: config.clientUrl }));
+
+const allowedOrigins = config.clientUrl === '*' 
+  ? '*' 
+  : config.clientUrl.includes(',') 
+    ? config.clientUrl.split(',').map(s => s.trim()) 
+    : config.clientUrl;
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
 app.use(express.json());
+
+// Health check endpoints for Render / Monitoring
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'YT Watch Party backend is running' });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 const httpServer = createServer(app);
 setupSocket(httpServer);
@@ -22,8 +41,9 @@ const startServer = async () => {
     RoomManager.cleanupStaleRooms();
   }, 10 * 60 * 1000);
 
-  httpServer.listen(config.port, () => {
-    console.log(`Server listening on port ${config.port}`);
+  const port = Number(process.env.PORT) || 3001;
+  httpServer.listen(port, '0.0.0.0', () => {
+    console.log(`Server listening on 0.0.0.0:${port}`);
   });
 };
 

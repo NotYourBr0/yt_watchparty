@@ -10,6 +10,7 @@ class SocketService {
       this.socket = io(SERVER_URL, {
         autoConnect: true,
         reconnection: true,
+        transports: ['websocket', 'polling'],
       });
     }
     return this.socket;
