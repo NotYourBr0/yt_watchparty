@@ -1,5 +1,7 @@
 # YT — Synchronized YouTube Watch Party
 
+# 24/7 Uptime
+
 **yt** is a modern, real-time web application that lets users watch YouTube videos together in synchronized room sessions with full role-based permissions, participant requests, and chat features.
 
 ---
